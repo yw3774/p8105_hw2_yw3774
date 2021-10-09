@@ -1,0 +1,205 @@
+---
+title: "p8105_hw2_yw3774.Rmd"
+author: "Yida Wang"
+date: "10/1/2021"
+output: github_document
+---
+
+```{r Library_Setup}
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+```
+
+## problem 1
+Read and clean the Mr. Trash Wheel sheet:  
+* specify the sheet in the Excel file and to omit non-data entries (rows with notes / figures; columns containing notes) using arguments in read_excel  
+* use reasonable variable names  
+* omit rows that do not include dumpster-specific data  
+* round the number of sports balls to the nearest integer  
+
+```{r}
+trash_wheel_df = 
+  read_excel("./data/Trash-Wheel-New.xlsx", sheet = "Mr. Trash Wheel", range = cell_cols ("A2:N534")) %>%
+  janitor::clean_names() %>% 
+  drop_na(dumpster) %>% 
+  mutate(sports_balls = round(sports_balls))
+trash_wheel_df
+```
+
+Read and clean precipitation data for 2018 and 2019. For each, omit rows without precipitation data and add a variable for year. 
+
+```{r}
+prec_2018 = 
+  readxl::read_excel("./data/Trash-Wheel-New.xlsx", sheet = "2018 Precipitation", range = "A2:B14") %>%
+  janitor::clean_names() %>% 
+  mutate(year = "2018")
+prec_2018
+prec_2019 = 
+  readxl::read_excel("./data/Trash-Wheel-New.xlsx", sheet = "2019 Precipitation", range = "A2:B14") %>% 
+  janitor::clean_names() %>% 
+  mutate(year = "2019")
+prec_2019
+```
+Next, combine precipitation datasets and convert month to a character variable (the variable month.name is built into R and should be useful).
+```{r}
+prec_df = 
+  bind_rows(prec_2018,prec_2019) %>% 
+  mutate(month = month.name[month]) %>% 
+  relocate(year)
+prec_df
+```
+
+Write a paragraph about these data; you are encouraged to use inline R. Be sure to note the number of observations in both resulting datasets, and give examples of key variables. For available data, what was the total precipitation in 2018? What was the median number of sports balls in a dumpster in 2019?
+
+* The Mr.Trash Wheel dataset  
+The Mr.Trash Wheel dataset contains litter data for **total of `r nrow(trash_wheel_df)` dumpsters** **through `r length(unique(trash_wheel_df$year))` years**. It has **`r ncol(trash_wheel_df)` variables** in this dataset, which is `r ls(trash_wheel_df)`.
+
+* prec_2018 & prec_2019 dataset  
+The **number of observation** is `r nrow(prec_2018)` for the 2018 precipitation data and `r nrow(prec_2019)` for the 2019 data. Both datasets have `r ncol(prec_2018)` variables, including month, year, and precipitation amount in inches. The **total amount of precipitation** in 2018 was `r sum(prec_2018$total)` inches and **the average amount**  was `r mean(prec_2018$total)` inches. The total amount of precipitation in 2019 (data for `r nrow(prec_2019)` months) was `r sum(prec_2019$total)` inches and the median was `r median(prec_2019$total)` inches. 
+
+* prec_df dataset   
+The conmbined dataset contains precipitation data for both 2018 and 2019. The **total amount of precipitation** was `r sum(prec_df$total)` and **the average** was `r mean(prec_df$total)`.
+
+## Problem 2
+This problem uses the FiveThirtyEight data; these data were gathered to create the interactive graphic on this page. In particular, we’ll use the data in pols-month.csv, unemployment.csv, and snp.csv. Our goal is to merge these into a single data frame using year and month as keys across datasets.
+
+First, clean the data in pols-month.csv. Use separate() to break up the variable mon into integer variables year, month, and day; replace month number with month name; create a president variable taking values gop and dem, and remove prez_dem and prez_gop; and remove the day variable.
+
+```{r}
+pols_month =
+  read_csv("./data/fivethirtyeight_datasets/pols-month.csv") %>% 
+  separate(mon, into = c("year", "month","day")) %>% 
+  mutate(
+    year = as.integer(year),
+    month = as.integer(month),
+    day = as.integer(day)
+  ) %>% 
+  mutate(month = month.name[month]) %>% 
+  mutate(year = as.character(year)) %>%
+  mutate(president = ifelse(prez_gop == 1 | prez_gop == 2, "gop", "dem")) %>% 
+  select(-prez_dem,-prez_gop,-day)
+pols_month
+```
+Second, clean the data in snp.csv using a similar process to the above. For consistency across datasets, arrange according to year and month, and organize so that year and month are the leading columns.
+
+```{r}
+snp_df = read_csv("./data/fivethirtyeight_datasets/snp.csv") %>%
+  separate(date, into = c("month", "day", "year"), sep = "/") %>%
+  mutate(year = as.numeric(year) + 2000) %>%
+  mutate(year = ifelse(year >= "2050", year - 100, year)) %>% 
+  mutate(month = as.numeric(month)) %>% 
+  arrange(year,month) %>% 
+  mutate(month = month.name[month]) %>% 
+  mutate(year = as.character(year)) %>%
+  relocate(year,month) %>% 
+  select(-day)
+snp_df
+```
+
+Third, tidy the unemployment data so that it can be merged with the previous datasets. This process will involve switching from “wide” to “long” format; ensuring that key variables have the same name; and ensuring that key variables take the same values.
+```{r}
+unemp_df = 
+  read_csv("./data/fivethirtyeight_datasets/unemployment.csv") %>% 
+  pivot_longer(
+    Jan:Dec,
+    names_to = "month",
+    values_to = "unemployment") %>% 
+  mutate(month = match(month,month.abb)) %>% 
+  mutate(month = month.name[month]) %>% 
+  janitor::clean_names() %>%
+  mutate(year = as.character(year))
+unemp_df
+```
+
+Join the datasets by merging snp into pols, and merging unemployment into the result.
+(Merge snp_df to pols_month and then merge unemp_df into the merged data using `left_join`)
+
+```{r}
+pols_snp_df = left_join(pols_month, snp_df, by = c("year", "month"))
+pols_snp_unemp_df = left_join(pols_snp_df, unemp_df, by = c("year", "month"))
+pols_snp_unemp_df
+```
+Write a short paragraph about these datasets. Explain briefly what each dataset contained, and describe the resulting dataset (e.g. give the dimension, range of years, and names of key variables).
+
+* pols_month dataset  
+The **dimension of observations** in pols_month dataset is `r nrow(pols_month)` and `r ncol(pols_month)`.  
+The **year range** in national politicians who are democratic or republican is from `r max(as.numeric(pols_month$year))` to `r min(as.numeric(pols_month$year))` years. 
+The **key variables** include the number of republican senators, governors, representatives, and president,as well as the number of democratic senators, governors, representatives, and president at each year and month.
+
+* snp_df dataset 
+The **dimension of observations** in snp dataset is `r nrow(snp_df)` and `r ncol(snp_df)`.
+The **year range** is`r max(as.numeric(snp_df$year)) - min(as.numeric(snp_df$year))` years from `r min(as.numeric(snp_df$year))` to  `r max(as.numeric(snp_df$year))`.
+The **key variable** in this dataset is close which specifies the closing values of the S&P stock index on the associated date (year-month). The average closing value is `r mean(snp_df$close)`.
+
+* unemp_df dataset
+The **dimension of observations** in unemployment dataset is `r nrow(unemp_df)` and `r ncol(unemp_df)`.
+The **year range** is`r max(as.numeric(unemp_df$year)) - min(as.numeric(unemp_df$year))` years from `r min(as.numeric(unemp_df$year))` to  `r max(as.numeric(unemp_df$year))`.
+The **key variable** in this dataset is unemployment which specifies the percentage of unemployment on associated data (year-month). The average unemployment rate is `r mean(unemp_df$unemployment, na.rm = TRUE)`%. The highest unemployment rate is `r max(unemp_df$unemployment, na.rm = TRUE)`% and the lowest is `r min(unemp_df$unemployment, na.rm = TRUE)`%.
+
+* pols_snp_unemp_df dataset
+
+It is a merged dataframe from the three datasets above and the keys to merge the set are year and month.
+The **dimension of observations** in this dataset is `r nrow(pols_snp_unemp_df)` and `r ncol(pols_snp_unemp_df)`.
+The **year range** is same as pols_month dataset.
+The **key variable** in this dataset is the conbination of the previous variables in pols_month with closing market index and unemployment rate with the associated date from the pols_month data.
+
+## Problem 3
+Load and tidy the data. Note that, although these data may seem fairly well formatted initially, the names of a categorical predictor and the case structure of string variables changed over time; you’ll need to address this in your data cleaning. Also, some rows seem duplicated, and these will need to be removed (hint: google something like “dplyr remove duplicate rows” to get started).
+
+```{r}
+popbb_names = 
+   read_csv("./data/Popular_Baby_Names.csv") %>% 
+   janitor::clean_names() %>% 
+   mutate(ethnicity = gsub(" ", "_", ethnicity)) %>% 
+   mutate(gender = tolower(gender), 
+          ethnicity = tolower(ethnicity),
+          childs_first_name = tolower(childs_first_name),
+          childs_first_name = str_to_title(childs_first_name)) %>% 
+   mutate(ethnicity = recode(ethnicity, "asian_and_pacific_islander" = "asian_and_paci", "white_non_hispanic" = "white_non_hisp", "black_non_hispanic" = "black_non_hisp")) %>%
+  distinct()
+popbb_names
+```
+
+Produce a well-structured, reader-friendly table showing the rank in popularity of the name “Olivia” as a female baby name over time; this should have rows for ethnicities and columns for year. 
+
+```{r}
+Olivia_df = 
+  filter(popbb_names, childs_first_name == "Olivia") %>% 
+  filter(gender == "female") %>% 
+  select(year_of_birth, ethnicity, rank) %>% 
+  arrange(ethnicity, year_of_birth)
+
+Olivia_df
+```
+
+Produce a similar table showing the most popular name among male children over time.
+
+```{r}
+popmale_names = 
+  filter(popbb_names, gender == "male", rank == "1") %>% 
+  select(year_of_birth, ethnicity, childs_first_name) %>% 
+  arrange(ethnicity, year_of_birth) %>% 
+  rename(most_popmalebb_name = childs_first_name)
+
+popmale_names
+```
+
+Finally, for male, white non-hispanic children born in 2016, produce a scatter plot showing the number of children with a name (y axis) against the rank in popularity of that name (x axis).
+
+```{r}
+scatter_df =  
+  filter(popbb_names, year_of_birth == "2016", gender == "male", ethnicity == "white_non_hisp") 
+
+df_plot = ggplot(scatter_df, aes(x = rank, y = count)) + 
+  geom_point(color = 'blue') +
+  labs(title = "Number vs Rank of Popularity of Names for White Non-hispanic male Children Born in 2016",
+       x = "rank",
+       y = "number")
+
+df_plot
+```
+
+```{r}
+ggsave("scatterplot.pdf")
+```
