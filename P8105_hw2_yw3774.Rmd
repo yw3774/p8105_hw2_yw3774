@@ -31,12 +31,12 @@ Read and clean precipitation data for 2018 and 2019. For each, omit rows without
 
 ```{r}
 prec_2018 = 
-  readxl::read_excel("./data/Trash-Wheel-New.xlsx", sheet = "2018 Precipitation", range = "A2:B14") %>%
+  read_excel("./data/Trash-Wheel-New.xlsx", sheet = "2018 Precipitation", range = "A2:B14") %>%
   janitor::clean_names() %>% 
   mutate(year = "2018")
 prec_2018
 prec_2019 = 
-  readxl::read_excel("./data/Trash-Wheel-New.xlsx", sheet = "2019 Precipitation", range = "A2:B14") %>% 
+  read_excel("./data/Trash-Wheel-New.xlsx", sheet = "2019 Precipitation", range = "A2:B14") %>% 
   janitor::clean_names() %>% 
   mutate(year = "2019")
 prec_2019
