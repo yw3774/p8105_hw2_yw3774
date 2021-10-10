@@ -77,7 +77,9 @@ pols_month =
   ) %>% 
   mutate(month = month.name[month]) %>% 
   mutate(year = as.character(year)) %>%
-  mutate(president = ifelse(prez_gop == 1 | prez_gop == 2, "gop", "dem")) %>% 
+  mutate(prez_gop = na_if(prez_gop, 2)) %>%
+  drop_na(prez_gop) %>%
+  mutate(president = ifelse(prez_gop == 1, "gop", "dem")) %>% 
   select(-prez_dem,-prez_gop,-day)
 pols_month
 ```
